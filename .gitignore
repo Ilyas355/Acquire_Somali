@@ -1,0 +1,22 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+# Python
+venv/
+__pycache__/
+*.pyc
+db.sqlite3
+.env
+
+# Expo
+node_modules/
+.expo/
+dist/
+
+# General
+.DS_Store
+*.log
