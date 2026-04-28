@@ -9,5 +9,5 @@ def hello(request):
     return JsonResponse({'message': 'Hello from Django!'})
 
 
-def api_home(request):
+def users_home(request):
     return JsonResponse({'message': 'Hello from Django!'})

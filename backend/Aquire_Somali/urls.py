@@ -21,10 +21,10 @@ from django.urls import include, path
 from django.shortcuts import redirect
 
 def home(request):
-    return redirect('/api/')
+    return redirect('/users/')
 
 urlpatterns = [
     path('', home),
     path('admin/', admin.site.urls),
-    path('api/', include('api.urls')),
+    path('users/', include('apps.users.urls')),
 ]

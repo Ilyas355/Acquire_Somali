@@ -32,7 +32,11 @@ CORS_ALLOW_ALL_ORIGINS = True
 # Application definition
 
 INSTALLED_APPS = [
-    'api',
+    'apps.users',
+    'apps.community',
+    'apps.content',
+    'apps.curriculum',
+    'apps.progress',
     'corsheaders',
     'rest_framework',
     'rest_framework_simplejwt',
