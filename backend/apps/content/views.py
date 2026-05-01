@@ -1,3 +1,88 @@
-from django.shortcuts import render
+from django.db import transaction
+from django.db.models import F
+from django.shortcuts import get_object_or_404
+from rest_framework import generics
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+from rest_framework.views import APIView
 
-# Create your views here.
+from apps.users.models import UserProfile
+
+from .models import Story, UserStoryProgress
+from .serializers import StoryDetailSerializer, StoryListSerializer
+
+
+class StoryListView(generics.ListAPIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = StoryListSerializer
+
+    def get_queryset(self):
+        queryset = Story.objects.select_related('category').order_by('order')
+        category_id = self.request.query_params.get('category')
+        if category_id:
+            try:
+                queryset = queryset.filter(category_id=int(category_id))
+            except (ValueError, TypeError):
+                pass
+        return queryset
+
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context['progress_map'] = {
+            p.story_id: p
+            for p in UserStoryProgress.objects.filter(user=self.request.user)
+        }
+        return context
+
+
+class StoryDetailView(generics.RetrieveAPIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = StoryDetailSerializer
+    queryset = Story.objects.select_related('category').prefetch_related('lines__tips')
+
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        try:
+            progress = UserStoryProgress.objects.get(
+                user=self.request.user, story_id=self.kwargs['pk']
+            )
+            context['progress_map'] = {progress.story_id: progress}
+        except UserStoryProgress.DoesNotExist:
+            context['progress_map'] = {}
+        return context
+
+
+class StoryProgressUpdateView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def patch(self, request, pk):
+        story = get_object_or_404(Story, pk=pk)
+        try:
+            last_line_position = int(request.data.get('last_line_position', ''))
+        except (ValueError, TypeError):
+            return Response({'error': 'last_line_position must be an integer'}, status=400)
+
+        progress, _ = UserStoryProgress.objects.get_or_create(user=request.user, story=story)
+        if not progress.is_completed:
+            progress.last_line_position = last_line_position
+            progress.save(update_fields=['last_line_position'])
+        return Response({'last_line_position': progress.last_line_position})
+
+
+class StoryCompleteView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, pk):
+        story = get_object_or_404(Story, pk=pk)
+        with transaction.atomic():
+            progress, _ = UserStoryProgress.objects.get_or_create(user=request.user, story=story)
+            xp_awarded = 0
+            if not progress.is_completed:
+                progress.is_completed = True
+                progress.last_line_position = story.lines.count()
+                progress.save(update_fields=['is_completed', 'last_line_position'])
+                xp_awarded = story.xp_reward
+                UserProfile.objects.filter(user=request.user).update(
+                    total_xp=F('total_xp') + xp_awarded
+                )
+        return Response({'is_completed': True, 'xp_awarded': xp_awarded})
